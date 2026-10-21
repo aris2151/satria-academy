@@ -1,0 +1,23 @@
+@import 'tailwindcss';
+@import 'tw-animate-css';
+@import 'shadcn/tailwind.css';
+
+@custom-variant dark (&:is(.dark *));
+
+:root {
+  --background: #080909;
+  --foreground: #f2efe5;
+  --font-display: 'Arial Narrow', 'Helvetica Neue', Arial, sans-serif;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: 'Helvetica Neue', Arial, sans-serif;
+  --font-display: var(--font-display);
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body { margin: 0; background: var(--background); color: var(--foreground); font-family: 'Helvetica Neue', Arial, sans-serif; }
+::selection { background: #c9a650; color: #080909; }
