@@ -1,0 +1,18 @@
+{
+  "id": "/",
+  "name": "SATRIA ACADEMY — Elite TNI–Polri Preparation",
+  "short_name": "SATRIA ACADEMY",
+  "description": "Persiapan seleksi TNI–Polri: akademik, psikotes, jasmani, dan evaluasi.",
+  "lang": "id-ID",
+  "start_url": "/?source=pwa",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#090d0b",
+  "theme_color": "#090d0b",
+  "categories": ["education", "productivity"],
+  "icons": [
+    {"src": "/icon-192.svg", "sizes": "192x192", "type": "image/svg+xml", "purpose": "any"},
+    {"src": "/icon-512.svg", "sizes": "512x512", "type": "image/svg+xml", "purpose": "any"}
+  ]
+}

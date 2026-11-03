@@ -3,6 +3,14 @@ const nextConfig = {
   images: {
     unoptimized: true,
   },
+  async rewrites() {
+    return {
+      beforeFiles: [
+        { source: "/", destination: "/index.html" },
+        { source: "/login", destination: "/login.html" },
+      ],
+    }
+  },
   async headers() {
     return [
       {

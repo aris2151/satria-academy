@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#090d0b">
+  <meta name="robots" content="noindex,nofollow">
+  <title>Login Peserta — SATRIA ACADEMY</title>
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="icon" href="/icon-192.svg" type="image/svg+xml">
+  <style>
+    :root{--bg:#090d0b;--olive:#a8c779;--gold:#d8c58b;--cream:#f2f2e9;--muted:#a5ad9a;--line:#35402d}
+    *{box-sizing:border-box}
+    body{margin:0;min-height:100vh;display:grid;place-items:center;padding:22px;background:radial-gradient(ellipse at 50% 0,#35462a 0,transparent 55%),var(--bg);color:var(--cream);font-family:system-ui,sans-serif}
+    .card{width:min(100%,420px);padding:28px 24px;background:#121810f2;border:1px solid #65794b;box-shadow:0 24px 80px #0008}
+    .mark{width:52px;height:52px;display:grid;place-items:center;border:1px solid var(--gold);color:var(--olive);font-weight:900;font-size:22px;clip-path:polygon(18% 0,82% 0,100% 24%,100% 76%,50% 100%,0 76%,0 24%)}
+    .eyebrow{margin:22px 0 8px;color:var(--olive);font-size:10px;letter-spacing:.2em;font-weight:900}
+    h1{font-size:32px;line-height:1.05;margin:0 0 10px;text-transform:uppercase}
+    p{color:var(--muted);font-size:13px;line-height:1.7}
+    label{display:block;margin:18px 0 7px;font-size:10px;font-weight:800;letter-spacing:.1em}
+    input{width:100%;height:48px;padding:0 13px;color:var(--cream);background:#090d0b;border:1px solid var(--line);font:inherit}
+    button{display:flex;align-items:center;justify-content:center;width:100%;min-height:46px;margin-top:12px;padding:12px;background:var(--olive);color:#11170e;border:1px solid var(--olive);font-size:11px;font-weight:900;letter-spacing:.08em;cursor:pointer}
+    button:disabled{opacity:.5}.secondary{background:transparent;color:var(--cream);border-color:var(--line)}
+    .msg{min-height:22px;font-size:12px;color:var(--gold);overflow-wrap:anywhere}.error{color:#ffb4a7}
+    .hidden{display:none!important}.tiny{font-size:10px;text-align:center;margin-top:20px}a{color:var(--gold)}
+  </style>
+</head>
+<body>
+  <main class="card">
+    <a href="/" aria-label="Kembali ke beranda" style="text-decoration:none;color:inherit"><div class="mark">SA</div></a>
+    <div class="eyebrow">SATRIA ACADEMY / STUDENT ACCESS</div>
+    <h1 id="title">Masuk ke ruang peserta.</h1>
+    <p id="subtitle">Masukkan email aktif. Kami akan mengirim kode sekali pakai. Tidak perlu membuat atau mengingat password.</p>
+    <form id="loginForm">
+      <label for="email">EMAIL AKTIF</label>
+      <input id="email" type="email" autocomplete="email" maxlength="254" required placeholder="nama@email.com">
+      <div id="codeRow" class="hidden">
+        <label for="code">KODE VERIFIKASI EMAIL</label>
+        <input id="code" inputmode="numeric" autocomplete="one-time-code" maxlength="12" placeholder="Masukkan kode dari email">
+      </div>
+      <button id="submit" type="submit">KIRIM KODE LOGIN ↗</button>
+      <button id="back" class="secondary hidden" type="button">GANTI EMAIL</button>
+    </form>
+    <p id="message" class="msg" role="status" aria-live="polite"></p>
+    <p class="tiny">Login aman melalui Supabase Auth. <a href="/">Kembali ke website</a></p>
+  </main>
+  <script>
+    (function () {
+      const auth = window.satriaSupabase && window.satriaSupabase.auth;
+      const form = document.getElementById('loginForm');
+      const emailInput = document.getElementById('email');
+      const codeInput = document.getElementById('code');
+      const codeRow = document.getElementById('codeRow');
+      const submit = document.getElementById('submit');
+      const back = document.getElementById('back');
+      const message = document.getElementById('message');
+      let step = 'email';
+
+      function safeNext() {
+        const next = new URLSearchParams(location.search).get('next') || '/#portal';
+        return next.startsWith('/') && !next.startsWith('//') ? next : '/#portal';
+      }
+
+      function finish() { location.replace(safeNext()); }
+      function say(text, isError) {
+        message.textContent = text || '';
+        message.classList.toggle('error', !!isError);
+      }
+
+      async function init() {
+        if (!auth) {
+          say('Konfigurasi Supabase belum tersedia. Muat ulang setelah deployment selesai.', true);
+          submit.disabled = true;
+          return;
+        }
+        const { data, error } = await auth.getSession();
+        if (error) {
+          say(error.message, true);
+          return;
+        }
+        if (data.session) finish();
+      }
+
+      form.addEventListener('submit', async event => {
+        event.preventDefault();
+        submit.disabled = true;
+        say('');
+        try {
+          const email = emailInput.value.trim().toLowerCase();
+          if (step === 'email') {
+            const { error } = await auth.signInWithOtp({
+              email,
+              options: { shouldCreateUser: true, emailRedirectTo: location.origin + '/login?next=' + encodeURIComponent(safeNext()) }
+            });
+            if (error) throw error;
+            step = 'code';
+            codeRow.classList.remove('hidden');
+            back.classList.remove('hidden');
+            codeInput.required = true;
+            submit.textContent = 'VERIFIKASI & MASUK ↗';
+            document.getElementById('title').textContent = 'Periksa emailmu.';
+            document.getElementById('subtitle').textContent = 'Masukkan kode verifikasi yang dikirim ke ' + email + '.';
+            say('Kode dikirim. Periksa juga folder spam.');
+            codeInput.focus();
+            return;
+          }
+
+          const { data, error } = await auth.verifyOtp({ email, token: codeInput.value.trim(), type: 'email' });
+          if (error) throw error;
+          if (!data.user) throw new Error('Kode tidak cocok. Coba lagi.');
+          finish();
+        } catch (error) {
+          say(error.message || 'Login gagal. Periksa email dan coba lagi.', true);
+        } finally {
+          submit.disabled = false;
+        }
+      });
+
+      back.addEventListener('click', () => {
+        step = 'email';
+        codeRow.classList.add('hidden');
+        back.classList.add('hidden');
+        codeInput.required = false;
+        codeInput.value = '';
+        submit.textContent = 'KIRIM KODE LOGIN ↗';
+        document.getElementById('title').textContent = 'Masuk ke ruang peserta.';
+        document.getElementById('subtitle').textContent = 'Masukkan email aktif. Kami akan mengirim kode sekali pakai. Tidak perlu membuat atau mengingat password.';
+        say('');
+      });
+
+      init().catch(error => say(error.message || 'Layanan login belum dapat dimuat.', true));
+    })();
+  </script>
+</body>
+</html>
