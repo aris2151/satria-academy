@@ -1,4 +1,4 @@
-import { copyFile, readFile, readdir, writeFile } from 'node:fs/promises';
+import { cp, readFile, readdir, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import 'dotenv/config';
 
@@ -22,23 +22,25 @@ for (const key of required) {
 }
 
 const publicDirectory = resolve('public');
-await copyFile(
+const outputDirectory = resolve('dist');
+await cp(publicDirectory, outputDirectory, { recursive: true, force: true });
+await cp(
   resolve('node_modules/@supabase/supabase-js/dist/umd/supabase.js'),
-  resolve(publicDirectory, 'supabase.js')
+  resolve(outputDirectory, 'supabase.js')
 );
 await writeFile(
-  resolve(publicDirectory, 'runtime-config.js'),
+  resolve(outputDirectory, 'runtime-config.js'),
   `window.SATRIA_CONFIG = Object.freeze(${JSON.stringify(config)});\n`,
   'utf8'
 );
 
-for (const entry of await readdir(publicDirectory, { withFileTypes: true })) {
+for (const entry of await readdir(outputDirectory, { withFileTypes: true })) {
   if (!entry.isFile() || !entry.name.endsWith('.html')) continue;
-  const file = resolve(publicDirectory, entry.name);
+  const file = resolve(outputDirectory, entry.name);
   const html = (await readFile(file, 'utf8'))
     .replace(/<script src="(?:https:\/\/cdn\.jsdelivr\.net\/npm\/@supabase\/supabase-js@2(?:\/dist\/umd\/supabase\.js)?|\/supabase\.js|\/runtime-config\.js|\/api-client\.js)"><\/script>/g, '');
   const scripts = '<script src="/supabase.js"></script><script src="/runtime-config.js"></script><script src="/api-client.js"></script>';
   if (!html.includes('</head>')) throw new Error(`Missing </head> in ${entry.name}`);
   await writeFile(file, html.replace('</head>', `${scripts}</head>`), 'utf8');
 }
-console.log('Generated public runtime configuration for the SATRIA pages.');
+console.log('Built static frontend in dist/ and generated its public runtime configuration.');

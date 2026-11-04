@@ -2,8 +2,8 @@ services:
   - type: web
     name: satria-academy-api
     runtime: node
-    buildCommand: pnpm install --frozen-lockfile
-    startCommand: pnpm start:api
+    buildCommand: npm install
+    startCommand: npm start
     healthCheckPath: /healthz
     envVars:
       - key: NODE_ENV

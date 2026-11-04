@@ -1,31 +1,31 @@
 # SATRIA ACADEMY — TNI–Polri Preparation Platform
 
-The app has been separated from Hatchable in its source configuration. The target deployment is a Next.js project on Vercel serving the SATRIA pages from `public/`, an Express API on Render, and Supabase for PostgreSQL and email OTP authentication.
+The app has been separated from Hatchable in its source configuration. The target deployment is a static frontend on Vercel, an Express API on Render, and Supabase for PostgreSQL and email OTP authentication.
 
 ## Architecture
 
-- `app/` — the existing Next.js application.
-- `public/` — SATRIA landing, login, admin, and student pages plus browser code.
+- `public/` — static pages and browser code.
+- `dist/` — generated Vercel output; do not edit or commit.
 - `server/` — Express API host, Supabase Auth token verification, and PostgreSQL pool.
 - `api/` — existing route handlers, now loaded by Express. Route `access` declarations are enforced by the host.
 - `supabase/migrations/` — PostgreSQL schema and initial content for a new Supabase project.
-- `scripts/generate-runtime-config.js` — injects public Supabase/API configuration before Next.js builds or runs.
-- `render.yaml` — deployment configuration for the Express API.
+- `scripts/generate-runtime-config.js` — builds the static site and injects public Supabase/API configuration.
+- `render.yaml` / `vercel.json` — deployment configuration for the Express API and frontend.
 
-Next.js rewrites `/` and `/login` to the SATRIA landing and login documents in `public/`. The browser only receives the Supabase publishable/anon key. `DATABASE_URL` is server-only and the API connects to Postgres directly. Admin membership is checked against `public.admin_users`; it is not controlled by user-editable metadata. Tables have RLS enabled and no direct grants to `anon` or `authenticated`; application data access goes through the Express API.
+The browser only receives the Supabase publishable/anon key. `DATABASE_URL` is server-only and the API connects to Postgres directly. Admin membership is checked against `public.admin_users`; it is not controlled by user-editable metadata. Tables have RLS enabled and no direct grants to `anon` or `authenticated`; application data access goes through the Express API.
 
 ## Local setup
 
 Requirements: Node.js 20+, an accessible Supabase project, and the project's database connection string.
 
 1. Copy `.env.example` to `.env` and set `DATABASE_URL`, `SUPABASE_URL`, `SUPABASE_ANON_KEY`, and `CORS_ORIGINS`.
-2. Install dependencies with `pnpm install`.
+2. Install dependencies with `npm install`.
 3. Apply `supabase/migrations/20261103000000_initial_schema.sql` to the Supabase project using the Supabase SQL Editor or CLI.
-4. Configure Supabase Auth email OTP, SMTP delivery, and the allowed redirect URL for the local frontend (for example `http://localhost:3000/login`).
-5. Set `API_BASE_URL=http://localhost:3001` for the frontend build configuration and `CORS_ORIGINS=http://localhost:3000` for the API.
-6. Run `pnpm dev` to start Next.js. In a second terminal run `pnpm dev:api` with `PORT=3001`, then open `http://localhost:3000`.
+4. Configure Supabase Auth email OTP, SMTP delivery, and the allowed redirect URL for the local frontend (for example `http://localhost:8080/login`).
+5. Build the static frontend with `npm run build`.
+6. In one terminal run `npm run dev`. In another run `npx serve dist -l 8080`, then open `http://localhost:8080`.
 
-The frontend and API need to run at different local origins; include the frontend origin in `CORS_ORIGINS`. Never expose `DATABASE_URL` or a Supabase `service_role` key in browser code. This project does not require the service-role key.
+The static site and API need to run at different local origins; include `http://localhost:8080` in `CORS_ORIGINS`. Never expose `DATABASE_URL` or a Supabase `service_role` key in browser code. This project does not require the service-role key.
 
 ## Supabase setup
 
@@ -46,17 +46,17 @@ Only trusted operators should be added to `admin_users`. Verify access with sepa
 
 ## Deploy API to Render
 
-1. Connect the repository to Render and create a Web Service using `render.yaml`. The service installs the workspace dependencies and starts `server/index.js`.
+1. Connect the repository to Render and create a Web Service using `render.yaml`.
 2. Add the required Render environment variables: `DATABASE_URL`, `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `CORS_ORIGINS`, and `NODE_ENV=production`.
 3. Set `CORS_ORIGINS` to the exact Vercel production origin(s), without a trailing slash. Add preview domains only if they need API access.
 4. Wait for the service health check at `/healthz` to pass and note the public API origin.
 
 ## Deploy frontend to Vercel
 
-1. Import the same repository into Vercel and keep the detected Next.js framework settings; do not set a static output directory.
-2. Set `API_BASE_URL` to the Render API origin, `SUPABASE_URL` to the project URL, and `SUPABASE_ANON_KEY` to the publishable/anon key as Vercel environment variables.
+1. Import the same repository into Vercel. `vercel.json` builds and serves the `dist/` directory.
+2. Set `API_BASE_URL` to the Render API origin, `SUPABASE_URL` to the project URL, and `SUPABASE_ANON_KEY` to the publishable/anon key as Vercel build environment variables.
 3. Deploy and add the Vercel production URL to both Supabase Auth redirect URLs and Render `CORS_ORIGINS`.
-4. Redeploy after changing any frontend environment variable; the public config is generated during the build.
+4. Redeploy after changing any frontend build environment variable; the public config is generated at build time.
 
 ## Admin content editing
 
@@ -100,7 +100,7 @@ The Supabase migration creates the schema; it does not transfer existing product
 - [ ] Confirm private endpoints reject missing/invalid tokens and non-admin users; confirm public endpoints disclose no unpublished/admin data.
 - [ ] Inspect CORS allowlist, HTTPS, browser console, API logs, and the `/healthz` endpoint.
 - [ ] Check responsive layout, keyboard focus, reduced motion, and PWA/offline behavior; verify offline cache does not make API data appear current.
-- [ ] Verify the production build uses the right API origin and Supabase project, and exposes neither `DATABASE_URL` nor a `service_role` key in public files.
+- [ ] Verify the production build includes the right API origin and Supabase project, with no server secrets in `dist/`.
 - [ ] After deployment, create a test inquiry and remove or label it according to the retention policy.
 
 ## Scope and cutover status
