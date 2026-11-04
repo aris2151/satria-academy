@@ -19,6 +19,8 @@
 
     const headers = new Headers(input instanceof Request ? input.headers : undefined);
     new Headers(init && init.headers).forEach((value, key) => headers.set(key, value));
+    const usesSupabaseFunction = /\/functions\/v1\/satria-api$/.test(apiBaseUrl);
+    if (usesSupabaseFunction && config.supabaseAnonKey) headers.set('apikey', config.supabaseAnonKey);
     if (authClient) {
       const { data, error } = await authClient.auth.getSession();
       if (error) throw error;
@@ -26,7 +28,8 @@
       if (accessToken) headers.set('Authorization', `Bearer ${accessToken}`);
     }
 
-    const apiUrl = `${apiBaseUrl}${url.pathname}${url.search}`;
+    const apiPath = usesSupabaseFunction ? url.pathname.slice('/api'.length) : url.pathname;
+    const apiUrl = `${apiBaseUrl}${apiPath}${url.search}`;
     const requestOptions = Object.assign({}, init || {}, { headers });
     if (input instanceof Request) return originalFetch(new Request(apiUrl, input), requestOptions);
     return originalFetch(apiUrl, requestOptions);

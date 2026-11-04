@@ -6,7 +6,7 @@ const required = ['API_BASE_URL', 'SUPABASE_URL', 'SUPABASE_ANON_KEY'];
 const missing = required.filter(key => !process.env[key]);
 
 if (missing.length) {
-  throw new Error(`Missing Vercel build environment variables: ${missing.join(', ')}`);
+  throw new Error(`Missing frontend build environment variables: ${missing.join(', ')}`);
 }
 
 const config = {
@@ -14,11 +14,19 @@ const config = {
   supabaseUrl: process.env.SUPABASE_URL,
   supabaseAnonKey: process.env.SUPABASE_ANON_KEY
 };
-for (const key of required) {
-  const value = process.env[key];
-  if (key === 'API_BASE_URL' && new URL(value).origin !== value.replace(/\/+$/, '')) {
-    throw new Error('API_BASE_URL must contain only the Render API origin, without a path.');
+const apiUrl = new URL(config.apiBaseUrl);
+const supabaseUrl = new URL(config.supabaseUrl);
+if (apiUrl.search || apiUrl.hash) {
+  throw new Error('API_BASE_URL must not contain a query string or fragment.');
+}
+if (apiUrl.pathname === '/') {
+  const isLocalApi = ['localhost', '127.0.0.1'].includes(apiUrl.hostname) && apiUrl.protocol === 'http:';
+  if (apiUrl.protocol !== 'https:' && !isLocalApi) {
+    throw new Error('API_BASE_URL must use HTTPS except for a local development API.');
   }
+} else if (apiUrl.pathname !== '/functions/v1/satria-api' ||
+    apiUrl.origin !== supabaseUrl.origin || apiUrl.protocol !== 'https:') {
+  throw new Error('API_BASE_URL must be the Supabase satria-api function URL or a local API origin.');
 }
 
 const publicDirectory = resolve('public');

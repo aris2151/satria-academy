@@ -17,7 +17,8 @@ const sourceFiles = [
   ...await findJavaScript(resolve('server')),
   ...await findJavaScript(resolve('api')),
   ...await findJavaScript(resolve('scripts')),
-  ...await findJavaScript(resolve('public'))
+  ...await findJavaScript(resolve('public')),
+  ...await findJavaScript(resolve('supabase/functions'))
 ];
 
 for (const file of sourceFiles) {

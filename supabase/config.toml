@@ -1,0 +1,2 @@
+[functions.satria-api]
+verify_jwt = false

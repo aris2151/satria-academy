@@ -1,22 +1,22 @@
 # SATRIA ACADEMY — TNI–Polri Preparation Platform
 
-The app has been separated from Hatchable in its source configuration. The target deployment is a static frontend on Vercel, an Express API on Render, and Supabase for PostgreSQL and email OTP authentication.
+The app has been separated from Hatchable in its source configuration. The no-monthly-fee target is a static frontend on Cloudflare Pages, a Supabase Edge Function API, and Supabase for PostgreSQL and email OTP authentication.
 
 ## Architecture
 
 - `public/` — static pages and browser code.
-- `dist/` — generated Vercel output; do not edit or commit.
-- `server/` — Express API host, Supabase Auth token verification, and PostgreSQL pool.
-- `api/` — existing route handlers, now loaded by Express. Route `access` declarations are enforced by the host.
+- `dist/` — generated Cloudflare Pages output; do not edit or commit.
+- `supabase/functions/satria-api/` — deployed API; verifies Supabase sessions and admin membership before handling private requests.
+- `supabase/config.toml` — keeps gateway JWT checks disabled so public inquiry endpoints work; the function enforces user/admin access itself.
 - `supabase/migrations/` — PostgreSQL schema and initial content for a new Supabase project.
 - `scripts/generate-runtime-config.js` — builds the static site and injects public Supabase/API configuration.
-- `render.yaml` / `vercel.json` — deployment configuration for the Express API and frontend.
+- `server/` and `api/` — legacy Express API retained for local development; production uses the Edge Function.
 
-The browser only receives the Supabase publishable/anon key. `DATABASE_URL` is server-only and the API connects to Postgres directly. Admin membership is checked against `public.admin_users`; it is not controlled by user-editable metadata. Tables have RLS enabled and no direct grants to `anon` or `authenticated`; application data access goes through the Express API.
+The browser only receives the Supabase publishable/anon key. The Edge Function uses the Supabase service-role key from Supabase's server-side secrets; never put it in Cloudflare Pages variables or browser code. Admin membership is checked against `public.admin_users`, not user-editable metadata. Tables have RLS enabled and no direct grants to `anon` or `authenticated`; application data access goes through the Edge Function.
 
 ## Local setup
 
-Requirements: Node.js 20+, an accessible Supabase project, and the project's database connection string.
+Requirements: Node.js 20+, an accessible Supabase project, and the project's database connection string for the legacy local Express API.
 
 1. Copy `.env.example` to `.env` and set `DATABASE_URL`, `SUPABASE_URL`, `SUPABASE_ANON_KEY`, and `CORS_ORIGINS`.
 2. Install dependencies with `npm install`.
@@ -25,15 +25,15 @@ Requirements: Node.js 20+, an accessible Supabase project, and the project's dat
 5. Build the static frontend with `npm run build`.
 6. In one terminal run `npm run dev`. In another run `npx serve dist -l 8080`, then open `http://localhost:8080`.
 
-The static site and API need to run at different local origins; include `http://localhost:8080` in `CORS_ORIGINS`. Never expose `DATABASE_URL` or a Supabase `service_role` key in browser code. This project does not require the service-role key.
+For local development, the static site and Express API run at different origins; include `http://localhost:8080` in `CORS_ORIGINS`. The production Edge Function does not use `DATABASE_URL`; keep the service-role key in Supabase secrets only.
 
 ## Supabase setup
 
 1. Create a Supabase project and set a strong database password.
 2. Apply the migration in `supabase/migrations/`.
-3. Copy the Supabase project URL, publishable/anon key, and a PostgreSQL connection string into the required environment variables.
-4. Prefer the Supabase **session pooler** connection string for the persistent Express service on Render if direct database connectivity is unavailable. Keep SSL enabled.
-5. In Supabase Auth, enable email OTP, configure production SMTP, and allow the deployed Vercel login redirect URL. If the email template uses a numeric code, use the Supabase OTP template variable (`{{ .Token }}`).
+3. Before deploying the Edge Function, also apply `supabase/migrations/20261104000000_edge_api_rate_limits.sql`; it adds the private table/function used to preserve inquiry rate limiting.
+4. Keep the Supabase project URL and publishable/anon key for the frontend build. The Edge Function also needs the service-role key stored only in Supabase function secrets.
+5. In Supabase Auth, enable email OTP, configure production SMTP, and allow the deployed Cloudflare Pages login redirect URL. If the email template uses a numeric code, use the Supabase OTP template variable (`{{ .Token }}`).
 6. Create the first admin by signing up that person through the app and then running this statement in the SQL Editor, replacing the email:
 
    ```sql
@@ -44,19 +44,25 @@ The static site and API need to run at different local origins; include `http://
 
 Only trusted operators should be added to `admin_users`. Verify access with separate student and admin accounts.
 
-## Deploy API to Render
+## Deploy API to Supabase Edge Functions
 
-1. Connect the repository to Render and create a Web Service using `render.yaml`.
-2. Add the required Render environment variables: `DATABASE_URL`, `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `CORS_ORIGINS`, and `NODE_ENV=production`.
-3. Set `CORS_ORIGINS` to the exact Vercel production origin(s), without a trailing slash. Add preview domains only if they need API access.
-4. Wait for the service health check at `/healthz` to pass and note the public API origin.
+1. Apply `supabase/migrations/20261104000000_edge_api_rate_limits.sql` to the existing Supabase database.
+2. Install/use the Supabase CLI, run `npx supabase login`, then link the existing project with `npx supabase link --project-ref <PROJECT_REF>`.
+3. In Supabase Dashboard → **Edge Functions → Secrets**, ensure `SUPABASE_SERVICE_ROLE_KEY` is set and set `CORS_ORIGINS` to the exact Cloudflare Pages production origin(s), without a trailing slash. Add preview domains only if they need API access.
+4. From the repository root, deploy with `npx supabase functions deploy satria-api`. The function configuration disables gateway JWT enforcement because the function itself verifies student/admin sessions and must also serve public routes.
+5. The API base URL is `https://<PROJECT_REF>.supabase.co/functions/v1/satria-api`. Check `https://<PROJECT_REF>.supabase.co/functions/v1/satria-api/healthz`; it should return `{"status":"ok"}`.
 
-## Deploy frontend to Vercel
+Supabase Free includes Edge Functions and Postgres within its quotas. Free projects may pause after one week of inactivity; review the current [Supabase pricing](https://supabase.com/pricing). A custom SMTP provider may be needed for reliable production OTP email.
 
-1. Import the same repository into Vercel. `vercel.json` builds and serves the `dist/` directory.
-2. Set `API_BASE_URL` to the Render API origin, `SUPABASE_URL` to the project URL, and `SUPABASE_ANON_KEY` to the publishable/anon key as Vercel build environment variables.
-3. Deploy and add the Vercel production URL to both Supabase Auth redirect URLs and Render `CORS_ORIGINS`.
-4. Redeploy after changing any frontend build environment variable; the public config is generated at build time.
+## Deploy frontend to Cloudflare Pages
+
+1. Create a Cloudflare Pages project from GitHub repository `aris2151/satria-academy`, branch `static-root-deploy`, with repository root `.`.
+2. Set the build command to `npm run build` and the output directory to `dist`.
+3. Set these build environment variables for Production (and Preview if used): `API_BASE_URL=https://<PROJECT_REF>.supabase.co/functions/v1/satria-api`, `SUPABASE_URL=https://<PROJECT_REF>.supabase.co`, and `SUPABASE_ANON_KEY=<publishable-or-anon-key>`.
+4. After the first Pages deployment reveals its `*.pages.dev` origin, add that exact origin to the Supabase Edge Function `CORS_ORIGINS` secret. Redeploy the function if needed, then redeploy Pages. Cloudflare Pages reads `public/_redirects` for the `/login` route.
+5. Add the deployed Pages URL to Supabase Auth's allowed redirect URLs and set the login redirect URL accordingly. Redeploy after changing any build variable; the public config is generated at build time.
+
+Vercel Hobby is free but restricted to non-commercial, personal use under its fair-use rules. Since this academy advertises paid packages, use Cloudflare Pages rather than relying on Hobby for production.
 
 ## Admin content editing
 
@@ -98,11 +104,11 @@ The Supabase migration creates the schema; it does not transfer existing product
 - [ ] Test inquiry creation with consent, admin status updates, content save/reload, and working WhatsApp calls.
 - [ ] Test student profile, tasks, practice token lifecycle, quiz grading, materials, recruitment schedules, and empty/error states.
 - [ ] Confirm private endpoints reject missing/invalid tokens and non-admin users; confirm public endpoints disclose no unpublished/admin data.
-- [ ] Inspect CORS allowlist, HTTPS, browser console, API logs, and the `/healthz` endpoint.
+- [ ] Inspect CORS allowlist, HTTPS, browser console, Edge Function logs, and the `/healthz` endpoint.
 - [ ] Check responsive layout, keyboard focus, reduced motion, and PWA/offline behavior; verify offline cache does not make API data appear current.
 - [ ] Verify the production build includes the right API origin and Supabase project, with no server secrets in `dist/`.
 - [ ] After deployment, create a test inquiry and remove or label it according to the retention policy.
 
 ## Scope and cutover status
 
-The codebase now contains the Vercel/Render/Supabase application foundation and Supabase schema. The cloud services still need to be created and configured by the project owner. No production migration, data transfer, DNS change, or live authentication test has been performed.
+The static frontend and Supabase Edge Function implementation are prepared in the `static-root-deploy` branch. The function and Cloudflare Pages project still need to be deployed and configured by the project owner. No production data transfer, DNS change, or live authentication test has been performed.
